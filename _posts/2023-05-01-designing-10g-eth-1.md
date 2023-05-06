@@ -10,13 +10,13 @@ categories: ethernet
 *Links to the other parts in this series:*
 1. [Introduction]({% link _posts/2023-05-01-designing-10g-eth-1.md %}) *(this post)*
 2. [Design Overview and Verification]({% link _posts/2023-05-01-designing-10g-eth-2.md %}) 
-3. [Low-Latency Techniques]()
-4. [Performance Measurement and Comparison]()
-5. [Potential Improvements]()
+3. [Low-Latency Techniques]({% link _posts/2023-05-01-designing-10g-eth-3.md %})
+4. [Performance Measurement and Comparison]({% link _posts/2023-05-01-designing-10g-eth-4.md %})
+5. [Potential Improvements]({% link _posts/2023-05-01-designing-10g-eth-5.md %})
 
 ## Introduction
 
-This is the first in a series of blog posts describing my experience developing a low-latency 10G Ethernet core for FPGA. I decided to do this as a personal project to develop expertise in low-latency FPGA design and high-speed Ethernet as well as to experiment with tools and techniques that I could use full-time. As a small spoiler, the design has less than 60ns loopback latency, which is comparable to commercial offerings.
+This is the first in a series of blog posts describing my experience developing a low-latency 10G Ethernet core for FPGA. I decided to do this as a personal project to develop expertise in low-latency FPGA design and high-speed Ethernet as well as to experiment with tools and techniques that I could use full-time. As a small spoiler, the design has less than **60ns loopback latency**, which is comparable to commercial offerings.
 
 These posts will focus on the things that are likely different to a 'standard' design, as I believe this will be more interesting to the reader. Specifically:
 - The use of [cocotb](https://www.cocotb.org/) and [pyuvm](https://github.com/pyuvm/pyuvm) for verification
