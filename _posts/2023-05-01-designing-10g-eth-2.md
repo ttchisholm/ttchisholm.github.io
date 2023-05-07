@@ -63,4 +63,4 @@ An overview of the complete Ethernet core and example design is below. The core 
 
 The example design brings up the core, generates test packets and and measures the latency between the start of the transmitted frames and start of received frames. This will be discussed further in Part 4 - [Performance Measurement and Comparison]({% link _posts/2023-05-01-designing-10g-eth-4.md %})
 
-[Low-Latency Techniques]({% link _posts/2023-05-01-designing-10g-eth-3.md %})
+Next Post - [Low-Latency Techniques]({% link _posts/2023-05-01-designing-10g-eth-3.md %})

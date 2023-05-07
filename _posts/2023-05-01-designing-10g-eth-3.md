@@ -35,7 +35,7 @@ The GTY latency values described here can be found in [69011 - UltraScale+ GTY T
 
 In digital logic, a gearbox is used for width conversion while maintaining a constant overall data rate. For example, a parallel to serial converter could be described as a gearbox, taking N bits every N cycles and outputing 1 bit every cycle. 
 
-For 10G Ethernet this becomes slightly more complex, and is derived from the 64b/66b encoding. Data in 10G Ethernet is formed into 66-bit frames, which includes 64-bits of 'data' and a 2-bit header. The header describes whether the frame is payload data only or whether the data in the frame also contains control information. For example, in order to maintain clock recovery, idle frames are always transmitted at Ethernet Layer 1 regardless of whether data is being sent - these are IDLE control frames.
+For 10G Ethernet this becomes slightly more complex, and is derived from the 64b/66b encoding. Data in 10G Ethernet is formed into 66-bit frames, which includes 64-bits of 'data' and a 2-bit header. The header describes whether the frame is payload data only or whether the data in the frame also contains control information. For example, in order to maintain clock recovery, frames are always transmitted at Ethernet Layer 1 regardless of whether data is being sent - these are IDLE control frames.
 
 Because of this overhead, if the line rate of 10G Ethernet was prescisly 10Gbps, the true data rate would actually be:
 
@@ -57,7 +57,7 @@ However, implementing a custom gearbox proved to reduce average latency by ~8.5n
 ![Internal vs External Gearbox Loopback Latency](/assets/images/designing-10g-eth/latency-hist.png)
 <p style="text-align: center;"><b>Figure 1: Internal vs External Gearbox Loopback Latency</b></p>
 
-Designing the custom gearbox was actually quite challenging, as it is almost impossible to debug visually with binary data. Instead, I built a model in python which oprated on strings allowing me to visually confirm correct operation. This model was then integrated into a testbench as a 'golden refernce' and used to verify operation with random input in HDL. The trickiest aspect here is receive alignement, so to verify correct operation a varible bit level delay is implemented into the loopback mechanism of the main MAC/PCS UVM testbench, and the design is verified automatically under different scenarios with pytest.
+Designing the custom gearbox was actually quite challenging, as it is almost impossible to debug visually with binary data. Instead, I built a model in python which operated on strings, allowing me to visually confirm correct operation. This model was then integrated into a testbench as a 'golden reference' and used to verify operation with random input to the HDL. The trickiest aspect here was the receive alignement, so to verify correct operation a varible bit delay is implemented into the loopback mechanism of the main MAC/PCS UVM testbench, and the design is verified automatically under different scenarios with pytest.
 
 ```
 Cycle | Slip | Data    | Header | Buf   |    Header Output     |   Data Output
@@ -77,7 +77,7 @@ Count |      | Valid   | Valid  | Index |                      |
 ```
 <p style="text-align: center;"><b>Figure 2: Gearbox Model Output Extract</b></p>
 
-**Latency Saving (GTY Asynchronus vs Custom) =  ~35 to 65ns**  
+**Latency Saving (GTY Asynchronus vs Custom) =  ~60ns**  
 **Latency Saving (GTY Synchronus vs Custom) =  8.5ns average**
 
 ### PMA Buffer Bypass
@@ -93,16 +93,18 @@ By default, the two clock domains are not phase aligned, and a buffer is used to
 
 ### Minimal Buffering
 
-Buffering and pipelining is the enemy of low-latency operation. This sounds simple, but knowing where it could not be avoided was the most challenging aspect of the project. The design is right on the edge of passing timing for my device, to the point where I'm scared to rebuild. Pipelining not only eases the pressure on timing closure but makes processing the data easier, particularly when calculating the CRCs. 
+Buffering and pipelining is the enemy of low-latency operation. This sounds simple, but knowing where it could not be avoided was the most challenging aspect of the project. The design is right on the edge of passing timing for my device, to the point where I'm scared to change anything and rebuild. Pipelining not only eases the pressure on timing closure but makes processing the data easier, particularly when calculating the CRCs. 
 
-An example of this is when calculating the CRC on recieved packets. A typical MAC may buffer the whole packet, calculate the CRC and then only if it was correct give the packet to the user. A low latency MAC gives the data to the user as it is received to allow the user to start processing, while caculating the CRC on-the-go. A flag is then asserted at the end of the packet if the CRC was correct. In this design, the flag is asserted either on the last AXIS transfer of the packet or one cycle after, depending on how many bytes were in the packet. Delaying this further would ease the pressure on timing as the receive CRC chain is the critical path.
+An example of this is when calculating the CRC on recieved packets. A typical MAC may buffer the whole packet, calculate the CRC and then only if it was correct give the packet to the user. A low-latency MAC gives the data to the user as it is received to allow the user to start processing, while caculating the CRC on-the-go. A flag is then asserted at the end of the packet if the CRC was correct. In this design, the flag is asserted either on the last AXIS transfer of the packet or one cycle after, depending on how many bytes were in the packet. Delaying this further would ease the pressure on timing as the receive CRC chain is in the critical path.
 
 **Latency Saving = Tens to Hundreds of ns**
 
 ### Slicing-by-N CRC Algorithm
-While delaying CRC calculation might be acceptable on recieve, any delay in inserting the CRC for TX also delays the sending of the frame. Therefore it is necessary to update the CRC with 32 bits of data in a single cycle. At 322MHz, the naive bit-at-a-time approach is not viable. Luckily fast CRC algorithms are well studied, and one of the most common implementations is [Sarwate's algorithm](https://www.kernel.org/doc/Documentation/crc32.txt), which uses a 8-bit, 256 entry lookup table which updates the CRC a byte-at-a-time. Unfortuately a 32-bit, 4-billion entry lookup table isn't feasable on an FPGA, but Sarwate's algorithm can be parallelised for multi-byte inputs with the "Slicing-by-8" algorithm described by Intel in "High Octane CRC Generation with the Intel Slicing-by-8 Algorithm". This design uses a Slicing-by-4 implementation, and it means no additional pipelining is required to calculate the CRC, however it is the critical path for transmit and receive. 
+While delaying CRC calculation might be acceptable on recieve, any delay in inserting the CRC for TX also delays the sending of the frame. Therefore it is necessary to update the CRC with 32 bits of data in a single cycle. At 322MHz, the naive bit-at-a-time approach is not viable. Luckily fast CRC algorithms are well studied, and one of the most common implementations is [Sarwate's algorithm](https://www.kernel.org/doc/Documentation/crc32.txt), which uses a 8-bit, 256-entry lookup table which updates the CRC a byte-at-a-time. Unfortuately a 32-bit, 4-billion entry lookup table isn't feasable on an FPGA, but Sarwate's algorithm can be parallelised for multi-byte inputs with the "Slicing-by-8" algorithm described by Intel in *"High Octane CRC Generation with the Intel Slicing-by-8 Algorithm" (original source no longer avaliable)*. This design uses a Slicing-by-4 implementation, and it means no additional pipelining is required to calculate the CRC, however it is in the critical path for transmit and receive. 
 
 **Latency Saving = ~3 to 6ns**
+
+Next Post - [Performance Measurement and Comparison]({% link _posts/2023-05-01-designing-10g-eth-4.md %})
 
 ### *References*
 1. [UltraScale Architecture GTY Transceivers User Guide (UG578)](https://docs.xilinx.com/v/u/en-US/ug578-ultrascale-gty-transceivers)
